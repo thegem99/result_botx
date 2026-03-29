@@ -152,7 +152,7 @@ def view():
     roll_list = [str(start_no + i) for i in range(count)]
     
     # Using 50 workers for better speed on large school scans
-    with ThreadPoolExecutor(max_workers=50) as executor:
+    with ThreadPoolExecutor(max_workers=min(count,200)) as executor:
         futures = {executor.submit(fetch_result, rollcode, rn): rn for rn in roll_list}
         for future in as_completed(futures):
             res = future.result()
