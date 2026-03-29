@@ -126,12 +126,12 @@ def home():
 def view():
     rollcode = request.args.get("rollcode")
     start_no = int(request.args.get("rollno"))
-    count = min(int(request.args.get("count", 1)), 50)
+    count = int(request.args.get("count", 1))
     
     results = []
     roll_list = [str(start_no + i) for i in range(count)]
     
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=min(count,100)) as executor:
         futures = {executor.submit(fetch_result, rollcode, rn): rn for rn in roll_list}
         for future in as_completed(futures):
             res = future.result()
