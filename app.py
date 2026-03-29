@@ -19,7 +19,7 @@ def fetch_result(roll_code, roll_no):
     params = {"roll_code": roll_code, "roll_no": roll_no}
     headers = {"User-Agent": "Mozilla/5.0"}
     
-    for attempt in range(3):
+    for attempt in range(8):
         try:
             response = requests.get(API_URL, params=params, headers=headers, timeout=15)
             if response.status_code == 200:
