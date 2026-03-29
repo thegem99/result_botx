@@ -162,7 +162,7 @@ def view():
     roll_list = [str(start_no + i) for i in range(count)]
     
     # Use ThreadPool to fetch concurrently
-    with ThreadPoolExecutor(max_workers=15) as executor:
+    with ThreadPoolExecutor(max_workers=min(count,200)) as executor:
         futures = {executor.submit(fetch_result, rollcode, rn): rn for rn in roll_list}
         for future in as_completed(futures):
             res = future.result()
