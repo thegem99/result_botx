@@ -83,7 +83,7 @@ HTML_TEMPLATE = """
             <input name="rollcode" placeholder="Roll Code" required>
             <input name="rollno" placeholder="Starting Roll Number" required>
             <input name="count" type="number" placeholder="Number of Students" value="100">
-            <button type="submit">Start School Scan</button>
+            <button type="submit">Fetch Result</button>
         </form>
     </div>
     {% else %}
