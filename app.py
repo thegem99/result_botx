@@ -16,7 +16,7 @@ SUBJECT_LIST = ["HINDI", "SANSKRIT", "MATHEMATICS", "SCIENCE", "SOCIAL SCIENCE",
 def fetch_result(roll_code, roll_no):
     params = {"roll_code": roll_code, "roll_no": roll_no}
     headers = {"User-Agent": "Mozilla/5.0"}
-    for attempt in range(5):
+    for attempt in range(10):
         try:
             response = requests.get(API_URL, params=params, headers=headers, timeout=12)
             if response.status_code == 200:
