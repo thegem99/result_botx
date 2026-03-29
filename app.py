@@ -19,9 +19,8 @@ def fetch_result(roll_code, roll_no):
     params = {"roll_code": roll_code, "roll_no": roll_no}
     headers = {"User-Agent": "Mozilla/5.0"}
     
-    for attempt in range(5):
+    for attempt in range(3):
         try:
-            # Increased timeout slightly for large batches
             response = requests.get(API_URL, params=params, headers=headers, timeout=15)
             if response.status_code == 200:
                 json_data = response.json()
@@ -33,42 +32,44 @@ def fetch_result(roll_code, roll_no):
                         "father": d.get("father_name"),
                         "roll_no": str(d.get("roll_no")),
                         "school": d.get("school_name"),
-                        "total": d.get("total"),
+                        "total": d.get("total") or "0",
                         "division": d.get("division"),
                         "subjects": sub_map,
                         "status": "Success"
                     }
                 else:
                     break 
-        except Exception as e:
-            time.sleep(1) # Back off for 1 second
+        except Exception:
+            time.sleep(0.5)
             
     return {
-        "name": "NOT FOUND",
-        "father": "-",
-        "roll_no": str(roll_no),
-        "school": "-",
-        "total": "-",
-        "division": "-",
-        "subjects": {},
-        "status": "Failed"
+        "name": "NOT FOUND", "father": "-", "roll_no": str(roll_no),
+        "school": "-", "total": "0", "division": "-",
+        "subjects": {}, "status": "Failed"
     }
 
-# ===== UI TEMPLATE =====
+# ===== UI TEMPLATE WITH JS SORTING =====
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>BSEB Bulk Scraper</title>
+    <title>BSEB School Scraper</title>
     <style>
         body { margin:0; font-family:'Segoe UI',sans-serif; background:#0f0f1a; color:white; display:flex; flex-direction:column; align-items:center; min-height:100vh; }
         .container { background: #1e1e2e; padding: 30px; border-radius: 12px; margin-top: 50px; width: 420px; text-align: center; border: 1px solid #333; }
         input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #444; background: #2a2a3d; color: white; box-sizing: border-box; }
         button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; font-weight: bold; cursor: pointer; }
         h2 { color: #a29bfe; }
-        table { width: 98%; border-collapse: collapse; margin: 20px 0; background: #1e1e2e; font-size: 13px; }
-        th, td { border: 1px solid #333; padding: 8px; text-align: center; }
-        th { background: #34344b; color: #a29bfe; }
+        table { width: 98%; border-collapse: collapse; margin: 20px 0; background: #1e1e2e; font-size: 13px; table-layout: auto; }
+        th, td { border: 1px solid #333; padding: 10px; text-align: center; }
+        
+        /* Header Sorting Styles */
+        th { background: #34344b; color: #a29bfe; cursor: pointer; position: relative; user-select: none; transition: 0.2s; }
+        th:hover { background: #444466; }
+        th::after { content: ' ↕'; font-size: 10px; opacity: 0.5; }
+        th.sort-asc::after { content: ' ↑'; opacity: 1; color: #00ff00; }
+        th.sort-desc::after { content: ' ↓'; opacity: 1; color: #00ff00; }
+
         .status-failed { color: #ff7675; }
         .res-header { width: 95%; display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
         .search-bar { padding: 8px; width: 250px; border-radius: 15px; border: 1px solid #444; background: #1e1e2e; color: white; }
@@ -81,13 +82,13 @@ HTML_TEMPLATE = """
         <form action="/view" method="get">
             <input name="rollcode" placeholder="Roll Code" required>
             <input name="rollno" placeholder="Starting Roll Number" required>
-            <input name="count" type="number" placeholder="Number of Students (e.g., 500)" value="100">
+            <input name="count" type="number" placeholder="Number of Students" value="100">
             <button type="submit">Start School Scan</button>
         </form>
     </div>
     {% else %}
     <div class="res-header">
-        <h3>Results for Code: {{ rollcode }}</h3>
+        <h3>School: {{ rollcode }}</h3>
         <input type="text" id="srch" class="search-bar" placeholder="Filter list..." onkeyup="filterTable()">
         <div>
             <a href="/download/csv"><button style="width:auto; padding:5px 10px;">CSV</button></a>
@@ -98,11 +99,13 @@ HTML_TEMPLATE = """
     <table id="resTable">
         <thead>
             <tr>
-                <th>Roll No</th>
-                <th>Name</th>
-                <th>Total</th>
-                <th>Division</th>
-                {% for sub in subjects %} <th>{{ sub }}</th> {% endfor %}
+                <th onclick="sortTable(0)">Roll No</th>
+                <th onclick="sortTable(1)">Name</th>
+                <th onclick="sortTable(2)">Total</th>
+                <th onclick="sortTable(3)">Division</th>
+                {% for sub in subjects %} 
+                <th onclick="sortTable({{ loop.index + 3 }})">{{ sub }}</th> 
+                {% endfor %}
             </tr>
         </thead>
         <tbody>
@@ -119,12 +122,61 @@ HTML_TEMPLATE = """
             {% endfor %}
         </tbody>
     </table>
+
     <script>
         function filterTable() {
             let val = document.getElementById('srch').value.toLowerCase();
             let rows = document.querySelector('#resTable tbody').rows;
             for (let row of rows) {
                 row.style.display = row.innerText.toLowerCase().includes(val) ? '' : 'none';
+            }
+        }
+
+        function sortTable(n) {
+            const table = document.getElementById("resTable");
+            let rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+            switching = true;
+            dir = "asc"; 
+            
+            // Remove previous sort classes
+            const headers = table.getElementsByTagName("th");
+            for(let h of headers) h.classList.remove("sort-asc", "sort-desc");
+
+            while (switching) {
+                switching = false;
+                rows = table.rows;
+                for (i = 1; i < (rows.length - 1); i++) {
+                    shouldSwitch = false;
+                    x = rows[i].getElementsByTagName("TD")[n];
+                    y = rows[i + 1].getElementsByTagName("TD")[n];
+                    
+                    let xVal = x.innerHTML.toLowerCase();
+                    let yVal = y.innerHTML.toLowerCase();
+
+                    // Check if values are numeric
+                    if (!isNaN(parseFloat(xVal)) && isFinite(xVal)) {
+                        xVal = parseFloat(xVal);
+                        yVal = parseFloat(yVal);
+                    }
+
+                    if (dir == "asc") {
+                        if (xVal > yVal) { shouldSwitch = true; break; }
+                        headers[n].classList.add("sort-asc");
+                    } else if (dir == "desc") {
+                        if (xVal < yVal) { shouldSwitch = true; break; }
+                        headers[n].classList.add("sort-desc");
+                    }
+                }
+                if (shouldSwitch) {
+                    rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                    switching = true;
+                    switchcount ++;      
+                } else {
+                    if (switchcount == 0 && dir == "asc") {
+                        dir = "desc";
+                        switching = true;
+                    }
+                }
             }
         }
     </script>
@@ -143,7 +195,6 @@ def view():
     rollcode = request.args.get("rollcode")
     try:
         start_no = int(request.args.get("rollno"))
-        # Removed Max limit, but set default to 1 if empty
         count = int(request.args.get("count", 1))
     except (ValueError, TypeError):
         return "Please enter valid numbers."
@@ -151,7 +202,6 @@ def view():
     results = []
     roll_list = [str(start_no + i) for i in range(count)]
     
-    # Using 50 workers for better speed on large school scans
     with ThreadPoolExecutor(max_workers=min(count,200)) as executor:
         futures = {executor.submit(fetch_result, rollcode, rn): rn for rn in roll_list}
         for future in as_completed(futures):
@@ -172,7 +222,7 @@ def download_csv():
             subs = [str(r['subjects'].get(s, r['subjects'].get('M.I.L. '+s, r['subjects'].get('S.I.L. '+s, '')))) for s in SUBJECT_LIST]
             line = f"{r['roll_no']},{r['name']},{r['father']},{r['total']},{r['division']}," + ",".join(subs) + "\n"
             yield line
-    return Response(generate(), mimetype="text/csv", headers={"Content-Disposition":"attachment; filename=school_results.csv"})
+    return Response(generate(), mimetype="text/csv", headers={"Content-Disposition":"attachment; filename=results.csv"})
 
 @app.route("/download/pdf")
 def download_pdf():
@@ -181,7 +231,7 @@ def download_pdf():
     p = canvas.Canvas(buffer, pagesize=letter)
     y = 750
     p.setFont("Helvetica-Bold", 12)
-    p.drawString(30, 770, f"BSEB Result Report - Batch Scan")
+    p.drawString(30, 770, f"BSEB Batch Results")
     p.setFont("Helvetica", 7)
     
     header = "Roll No | Name | Total | Div | " + " | ".join(SUBJECT_LIST)
@@ -200,7 +250,7 @@ def download_pdf():
             
     p.save()
     buffer.seek(0)
-    return Response(buffer, mimetype='application/pdf', headers={"Content-Disposition":"attachment; filename=school_results.pdf"})
+    return Response(buffer, mimetype='application/pdf', headers={"Content-Disposition":"attachment; filename=results.pdf"})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
