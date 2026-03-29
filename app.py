@@ -12,7 +12,6 @@ app = Flask(__name__)
 # Configuration
 API_URL = "https://examapi.biharboardonline.org/result"
 CACHE = {}
-# Standard subjects to display in the table
 SUBJECT_LIST = ["HINDI", "SANSKRIT", "MATHEMATICS", "SCIENCE", "SOCIAL SCIENCE", "ENGLISH"]
 
 # ===== API LOGIC WITH 5-ATTEMPT RETRY =====
@@ -20,15 +19,14 @@ def fetch_result(roll_code, roll_no):
     params = {"roll_code": roll_code, "roll_no": roll_no}
     headers = {"User-Agent": "Mozilla/5.0"}
     
-    # Try up to 5 times for a single roll number
     for attempt in range(5):
         try:
-            response = requests.get(API_URL, params=params, headers=headers, timeout=12)
+            # Increased timeout slightly for large batches
+            response = requests.get(API_URL, params=params, headers=headers, timeout=15)
             if response.status_code == 200:
                 json_data = response.json()
                 if json_data.get("success") and json_data.get("data"):
                     d = json_data["data"]
-                    # Map subjects: The API uses names like "M.I.L. HINDI"
                     sub_map = {s["sub_name"]: s["sub_total"] for s in d.get("subjects", [])}
                     return {
                         "name": d.get("name"),
@@ -41,13 +39,10 @@ def fetch_result(roll_code, roll_no):
                         "status": "Success"
                     }
                 else:
-                    # If API says success is false, the roll number likely doesn't exist
                     break 
         except Exception as e:
-            print(f"⚠️ Attempt {attempt+1} failed for {roll_no}: {e}")
-            time.sleep(1) # Wait before retrying
+            time.sleep(1) # Back off for 1 second
             
-    # Fallback: If 5 attempts fail or result not found, return blank data to keep sorting intact
     return {
         "name": "NOT FOUND",
         "father": "-",
@@ -64,45 +59,40 @@ HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>BSEB Result Portal 2026</title>
+    <title>BSEB Bulk Scraper</title>
     <style>
-        body { margin:0; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background:#0f0f1a; color:white; display:flex; flex-direction:column; align-items:center; min-height:100vh; }
-        .container { background: #1e1e2e; padding: 30px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); margin-top: 50px; width: 420px; text-align: center; border: 1px solid #333; }
-        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #444; background: #2a2a3d; color: white; box-sizing: border-box; font-size: 16px; }
-        input:focus { border-color: #764ba2; outline: none; box-shadow: 0 0 8px rgba(118, 75, 162, 0.4); }
-        button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; font-weight: bold; cursor: pointer; transition: 0.3s; text-transform: uppercase; }
-        button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-        h2 { color: #a29bfe; margin-bottom: 20px; letter-spacing: 1px; }
-        .res-header { width: 95%; display: flex; justify-content: space-between; align-items: center; margin-top: 30px; }
-        table { width: 98%; border-collapse: collapse; margin: 20px 0; background: #1e1e2e; border-radius: 8px; overflow: hidden; font-size: 14px; }
-        th, td { border: 1px solid #333; padding: 12px; text-align: center; }
-        th { background: #34344b; color: #a29bfe; font-weight: 600; }
-        tr:hover { background: #252538; }
-        .status-failed { color: #ff7675; font-weight: bold; }
-        .search-bar { padding: 10px; width: 300px; border-radius: 20px; border: 1px solid #444; background: #1e1e2e; color: white; }
-        .btn-group { display: flex; gap: 10px; }
-        .btn-small { width: auto; padding: 8px 15px; font-size: 13px; }
+        body { margin:0; font-family:'Segoe UI',sans-serif; background:#0f0f1a; color:white; display:flex; flex-direction:column; align-items:center; min-height:100vh; }
+        .container { background: #1e1e2e; padding: 30px; border-radius: 12px; margin-top: 50px; width: 420px; text-align: center; border: 1px solid #333; }
+        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #444; background: #2a2a3d; color: white; box-sizing: border-box; }
+        button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; font-weight: bold; cursor: pointer; }
+        h2 { color: #a29bfe; }
+        table { width: 98%; border-collapse: collapse; margin: 20px 0; background: #1e1e2e; font-size: 13px; }
+        th, td { border: 1px solid #333; padding: 8px; text-align: center; }
+        th { background: #34344b; color: #a29bfe; }
+        .status-failed { color: #ff7675; }
+        .res-header { width: 95%; display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+        .search-bar { padding: 8px; width: 250px; border-radius: 15px; border: 1px solid #444; background: #1e1e2e; color: white; }
     </style>
 </head>
 <body>
     {% if page == 'home' %}
     <div class="container">
-        <h2>BSEB Result Portal</h2>
+        <h2>BSEB School Scraper</h2>
         <form action="/view" method="get">
-            <input name="rollcode" placeholder="Roll Code (e.g., 51048)" required>
+            <input name="rollcode" placeholder="Roll Code" required>
             <input name="rollno" placeholder="Starting Roll Number" required>
-            <input name="count" type="number" placeholder="How many students?" value="10" min="1" max="100">
-            <button type="submit">Fetch Results</button>
+            <input name="count" type="number" placeholder="Number of Students (e.g., 500)" value="100">
+            <button type="submit">Start School Scan</button>
         </form>
     </div>
     {% else %}
     <div class="res-header">
-        <h2>Results Sheet</h2>
-        <input type="text" id="srch" class="search-bar" placeholder="Search Name/Roll..." onkeyup="filterTable()">
-        <div class="btn-group">
-            <a href="/download/csv"><button class="btn-small">Export CSV</button></a>
-            <a href="/download/pdf"><button class="btn-small">Export PDF</button></a>
-            <a href="/"><button class="btn-small" style="background:#444">New Search</button></a>
+        <h3>Results for Code: {{ rollcode }}</h3>
+        <input type="text" id="srch" class="search-bar" placeholder="Filter list..." onkeyup="filterTable()">
+        <div>
+            <a href="/download/csv"><button style="width:auto; padding:5px 10px;">CSV</button></a>
+            <a href="/download/pdf"><button style="width:auto; padding:5px 10px;">PDF</button></a>
+            <a href="/"><button style="width:auto; padding:5px 10px; background:#444">Back</button></a>
         </div>
     </div>
     <table id="resTable">
@@ -123,7 +113,6 @@ HTML_TEMPLATE = """
                 <td><b>{{ r.total }}</b></td>
                 <td>{{ r.division }}</td>
                 {% for sub in subjects %}
-                {# Checking for names with prefixes like M.I.L. or S.I.L. #}
                 <td>{{ r.subjects.get('M.I.L. ' + sub, r.subjects.get('S.I.L. ' + sub, r.subjects.get(sub, '-'))) }}</td>
                 {% endfor %}
             </tr>
@@ -154,26 +143,25 @@ def view():
     rollcode = request.args.get("rollcode")
     try:
         start_no = int(request.args.get("rollno"))
+        # Removed Max limit, but set default to 1 if empty
         count = int(request.args.get("count", 1))
     except (ValueError, TypeError):
-        return "Invalid input. Please enter numbers for Roll No and Count."
+        return "Please enter valid numbers."
 
     results = []
     roll_list = [str(start_no + i) for i in range(count)]
     
-    # Use ThreadPool to fetch concurrently
-    with ThreadPoolExecutor(max_workers=min(count,200)) as executor:
+    # Using 50 workers for better speed on large school scans
+    with ThreadPoolExecutor(max_workers=50) as executor:
         futures = {executor.submit(fetch_result, rollcode, rn): rn for rn in roll_list}
         for future in as_completed(futures):
             res = future.result()
-            if res:
-                results.append(res)
+            if res: results.append(res)
     
-    # Important: Strict numerical sorting by roll number
     results.sort(key=lambda x: int(x["roll_no"]))
     CACHE["last_results"] = results
     
-    return render_template_string(HTML_TEMPLATE, page='view', results=results, subjects=SUBJECT_LIST)
+    return render_template_string(HTML_TEMPLATE, page='view', results=results, subjects=SUBJECT_LIST, rollcode=rollcode)
 
 @app.route("/download/csv")
 def download_csv():
@@ -184,7 +172,7 @@ def download_csv():
             subs = [str(r['subjects'].get(s, r['subjects'].get('M.I.L. '+s, r['subjects'].get('S.I.L. '+s, '')))) for s in SUBJECT_LIST]
             line = f"{r['roll_no']},{r['name']},{r['father']},{r['total']},{r['division']}," + ",".join(subs) + "\n"
             yield line
-    return Response(generate(), mimetype="text/csv", headers={"Content-Disposition":"attachment; filename=bseb_results.csv"})
+    return Response(generate(), mimetype="text/csv", headers={"Content-Disposition":"attachment; filename=school_results.csv"})
 
 @app.route("/download/pdf")
 def download_pdf():
@@ -192,28 +180,27 @@ def download_pdf():
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=letter)
     y = 750
-    p.setFont("Helvetica-Bold", 14)
-    p.drawString(200, 770, "BSEB Examination Result Report")
-    p.setFont("Helvetica", 8)
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(30, 770, f"BSEB Result Report - Batch Scan")
+    p.setFont("Helvetica", 7)
     
     header = "Roll No | Name | Total | Div | " + " | ".join(SUBJECT_LIST)
     p.drawString(30, y, header)
-    y -= 20
+    y -= 15
     
     for r in data:
         subs = [str(r['subjects'].get(s, r['subjects'].get('M.I.L. '+s, r['subjects'].get('S.I.L. '+s, '-')))) for s in SUBJECT_LIST]
         line = f"{r['roll_no']} | {r['name'][:15]} | {r['total']} | {r['division']} | " + " | ".join(subs)
         p.drawString(30, y, line)
-        y -= 15
-        if y < 50:
+        y -= 12
+        if y < 40:
             p.showPage()
+            p.setFont("Helvetica", 7)
             y = 750
             
     p.save()
     buffer.seek(0)
-    return Response(buffer, mimetype='application/pdf', headers={"Content-Disposition":"attachment; filename=bseb_results.pdf"})
+    return Response(buffer, mimetype='application/pdf', headers={"Content-Disposition":"attachment; filename=school_results.pdf"})
 
 if __name__ == "__main__":
-    # Get port from environment for deployment, fallback to 8080
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
