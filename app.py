@@ -212,6 +212,8 @@ def view():
                     consecutive_fail = 0
 
                 if consecutive_fail >= 5:
+                    # remove the last 5 consecutive failed results
+                    results = results[:-5]
                     break
 
             if consecutive_fail >= 5:
