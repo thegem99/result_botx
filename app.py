@@ -191,11 +191,32 @@ def view():
     
     results = []
     roll_list = [str(start_no + i) for i in range(count)]
-    with ThreadPoolExecutor(max_workers=min(count,100)) as executor:
-        futures = {executor.submit(fetch_result, rollcode, rn): rn for rn in roll_list}
-        for future in as_completed(futures):
-            results.append(future.result())
     
+    # --- UPDATED THREAD FETCHING LOGIC ---
+    with ThreadPoolExecutor(max_workers=min(count,100)) as executor:
+        consecutive_fail = 0
+        batch_size = 20  # adjust batch size if needed
+
+        for i in range(0, len(roll_list), batch_size):
+            batch = roll_list[i:i+batch_size]
+
+            futures = [executor.submit(fetch_result, rollcode, rn) for rn in batch]
+
+            for future in futures:
+                res = future.result()
+                results.append(res)
+
+                if res["status"] == "Failed":
+                    consecutive_fail += 1
+                else:
+                    consecutive_fail = 0
+
+                if consecutive_fail >= 5:
+                    break
+
+            if consecutive_fail >= 5:
+                break
+
     results.sort(key=lambda x: int(x["roll_no"]))
     
     # --- Data Analysis ---
