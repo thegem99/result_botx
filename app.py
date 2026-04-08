@@ -108,7 +108,7 @@ HTML_TEMPLATE = """
             <input type="text" id="srch" class="search-bar" placeholder="Search by name or roll..." onkeyup="filterTable()">
             <div style="float:right">
                 <a href="/download/csv"><button style="width:auto; padding:8px 20px;">Download CSV</button></a>
-                <button onclick={window.print()}style="width:auto; padding: 8px 20px;">Download PDF</button>
+                <button onclick="window.print()"style="width:auto; padding: 8px 20px;">Download PDF</button>
                 <a href="/"><button style="width:auto; padding:8px 20px; background:#444">New Search</button></a>
             </div>
         </div>
